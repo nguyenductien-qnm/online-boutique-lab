@@ -3,13 +3,18 @@ SHELL := /bin/bash
 ARGOCD_CHART_DIR := bootstrap/argocd
 ARGOCD_NAMESPACE := argocd
 ARGOCD_RELEASE := argocd-bootstrap
+ARGOCD_REPOSITORY_NAME := argo
+ARGOCD_REPOSITORY_URL := https://argoproj.github.io/argo-helm
 GITOPS_ROOT := gitops/clusters/local
 KUBE_CONTEXT ?= $(shell kubectl config current-context 2>/dev/null)
 
-.PHONY: argocd-dependencies validate-gitops check-kind-context bootstrap-gitops
+.PHONY: argocd-repository argocd-dependencies validate-gitops check-kind-context bootstrap-gitops
 
-argocd-dependencies:
-	helm dependency build $(ARGOCD_CHART_DIR)
+argocd-repository:
+	helm repo add $(ARGOCD_REPOSITORY_NAME) $(ARGOCD_REPOSITORY_URL) --force-update
+
+argocd-dependencies: argocd-repository
+	helm dependency build $(ARGOCD_CHART_DIR) --skip-refresh
 
 validate-gitops: argocd-dependencies
 	helm lint $(ARGOCD_CHART_DIR)
