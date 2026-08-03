@@ -10,11 +10,15 @@ spec:
   source:
     repoURL: https://github.com/nguyenductien-qnm/online-boutique-lab.git
     targetRevision: main
-    path: gitops/clusters/local
+    path: gitops/apps/chart
+    helm:
+      valueFiles:
+        - values.yaml
+        - values-images.yaml
 
   destination:
     server: https://kubernetes.default.svc
-    namespace: argocd
+    namespace: online-boutique
 
   syncPolicy:
     automated:
