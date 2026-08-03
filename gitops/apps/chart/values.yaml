@@ -1,0 +1,89 @@
+global:
+  registry: "730335441285.dkr.ecr.ap-southeast-1.amazonaws.com/online-boutique"
+  defaultTag: "latest"
+
+serviceAccount:
+  create: true
+  name: online-boutique
+
+services:
+  adservice:
+    enabled: true
+    port: 9555
+
+  cartservice:
+    enabled: true
+    port: 7070
+    env:
+      REDIS_ADDR: "redis-cart:6379"
+
+  checkoutservice:
+    enabled: true
+    port: 5050
+    env:
+      PRODUCT_CATALOG_SERVICE_ADDR: "productcatalogservice:3550"
+      SHIPPING_SERVICE_ADDR: "shippingservice:50051"
+      PAYMENT_SERVICE_ADDR: "paymentservice:50051"
+      EMAIL_SERVICE_ADDR: "emailservice:5000"
+      CURRENCY_SERVICE_ADDR: "currencyservice:7000"
+      CART_SERVICE_ADDR: "cartservice:7070"
+      RECOMMENDATION_SERVICE_ADDR: "recommendationservice:8080"
+
+  currencyservice:
+    enabled: true
+    port: 7000
+
+  emailservice:
+    enabled: true
+    port: 5000
+
+  frontend:
+    enabled: true
+    containerPort: 8080
+    port: 80
+    env:
+      PORT: "8080"
+      PRODUCT_CATALOG_SERVICE_ADDR: "productcatalogservice:3550"
+      CURRENCY_SERVICE_ADDR: "currencyservice:7000"
+      CART_SERVICE_ADDR: "cartservice:7070"
+      RECOMMENDATION_SERVICE_ADDR: "recommendationservice:8080"
+      SHIPPING_SERVICE_ADDR: "shippingservice:50051"
+      CHECKOUT_SERVICE_ADDR: "checkoutservice:5050"
+      AD_SERVICE_ADDR: "adservice:9555"
+      SHOPPING_ASSISTANT_SERVICE_ADDR: "shoppingassistantservice:80"
+      ENABLE_PROFILER: "0"
+
+  loadgenerator:
+    enabled: true
+    port: 8089
+    command: ["locust"]
+    args: ["--host=http://frontend:80", "--web-port=8089"]
+    env:
+      FRONTEND_ADDR: "frontend:80"
+      USERS: "10"
+      RATE: "1"
+
+  paymentservice:
+    enabled: true
+    port: 50051
+
+  productcatalogservice:
+    enabled: true
+    port: 3550
+
+  recommendationservice:
+    enabled: true
+    port: 8080
+    env:
+      PRODUCT_CATALOG_SERVICE_ADDR: "productcatalogservice:3550"
+
+  redis-cart:
+    enabled: true
+    image:
+      repository: redis
+      tag: alpine
+    port: 6379
+
+  shippingservice:
+    enabled: true
+    port: 50051

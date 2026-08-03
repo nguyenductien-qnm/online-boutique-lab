@@ -1,0 +1,6 @@
+apiVersion: v2
+name: online-boutique
+description: elm chart for Google Online Boutique Microservices Demo
+type: application
+version: 0.1.0
+appVersion: "1.0.0"

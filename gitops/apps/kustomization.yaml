@@ -1,17 +1,10 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
-resources:
-  - service-account.yaml
-  - redis-cart.yaml
-  - productcatalogservice.yaml
-  - cartservice.yaml
-  - adservice.yaml
-  - currencyservice.yaml
-  - emailservice.yaml
-  - paymentservice.yaml
-  - shippingservice.yaml
-  - recommendationservice.yaml
-  - checkoutservice.yaml
-  - frontend.yaml
-  - loadgenerator.yaml
+helmCharts:
+  - name: chart
+    releaseName: online-boutique
+    namespace: online-boutique
+    valuesFile: chart/values.yaml
+    additionalValuesFiles:
+      - chart/values-images.yaml

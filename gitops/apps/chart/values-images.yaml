@@ -1,0 +1,55 @@
+services:
+  adservice:
+    image:
+      repository: "730335441285.dkr.ecr.ap-southeast-1.amazonaws.com/online-boutique/adservice"
+      tag: "6dbead2cda359b8d3b85d7628ddc28f7414bde57-30780838023"
+
+  cartservice:
+    image:
+      repository: "730335441285.dkr.ecr.ap-southeast-1.amazonaws.com/online-boutique/cartservice"
+      tag: "6dbead2cda359b8d3b85d7628ddc28f7414bde57-30780838023"
+
+  checkoutservice:
+    image:
+      repository: "730335441285.dkr.ecr.ap-southeast-1.amazonaws.com/online-boutique/checkoutservice"
+      tag: "6dbead2cda359b8d3b85d7628ddc28f7414bde57-30780838023"
+
+  currencyservice:
+    image:
+      repository: "730335441285.dkr.ecr.ap-southeast-1.amazonaws.com/online-boutique/currencyservice"
+      tag: "6dbead2cda359b8d3b85d7628ddc28f7414bde57-30780838023"
+
+  emailservice:
+    image:
+      repository: "730335441285.dkr.ecr.ap-southeast-1.amazonaws.com/online-boutique/emailservice"
+      tag: "6dbead2cda359b8d3b85d7628ddc28f7414bde57-30780838023"
+
+  frontend:
+    image:
+      repository: "730335441285.dkr.ecr.ap-southeast-1.amazonaws.com/online-boutique/frontend"
+      tag: "6dbead2cda359b8d3b85d7628ddc28f7414bde57-30780838023"
+
+  loadgenerator:
+    image:
+      repository: "730335441285.dkr.ecr.ap-southeast-1.amazonaws.com/online-boutique/loadgenerator"
+      tag: "6dbead2cda359b8d3b85d7628ddc28f7414bde57-30780838023"
+
+  paymentservice:
+    image:
+      repository: "730335441285.dkr.ecr.ap-southeast-1.amazonaws.com/online-boutique/paymentservice"
+      tag: "6dbead2cda359b8d3b85d7628ddc28f7414bde57-30780838023"
+
+  productcatalogservice:
+    image:
+      repository: "730335441285.dkr.ecr.ap-southeast-1.amazonaws.com/online-boutique/productcatalogservice"
+      tag: "6dbead2cda359b8d3b85d7628ddc28f7414bde57-30780838023"
+
+  recommendationservice:
+    image:
+      repository: "730335441285.dkr.ecr.ap-southeast-1.amazonaws.com/online-boutique/recommendationservice"
+      tag: "6dbead2cda359b8d3b85d7628ddc28f7414bde57-30780838023"
+
+  shippingservice:
+    image:
+      repository: "730335441285.dkr.ecr.ap-southeast-1.amazonaws.com/online-boutique/shippingservice"
+      tag: "6dbead2cda359b8d3b85d7628ddc28f7414bde57-30780838023"

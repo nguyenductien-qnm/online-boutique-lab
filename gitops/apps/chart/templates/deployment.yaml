@@ -1,0 +1,48 @@
+{{- range $name, $svc := .Values.services }}
+{{- if $svc.enabled }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $name }}
+  labels:
+    app: {{ $name }}
+spec:
+  selector:
+    matchLabels:
+      app: {{ $name }}
+  template:
+    metadata:
+      labels:
+        app: {{ $name }}
+    spec:
+      serviceAccountName: {{ if $.Values.serviceAccount }}{{ $.Values.serviceAccount.name | default "online-boutique" }}{{ else }}"online-boutique"{{ end }}
+      containers:
+        - name: {{ $name }}
+          {{- if and $svc.image $svc.image.repository $svc.image.tag }}
+          image: "{{ $svc.image.repository }}:{{ $svc.image.tag }}"
+          {{- else }}
+          image: "{{ $.Values.global.registry }}/{{ $name }}:{{ $.Values.global.defaultTag | default "latest" }}"
+          {{- end }}
+          imagePullPolicy: {{ $svc.imagePullPolicy | default "IfNotPresent" }}
+          {{- if $svc.command }}
+          command:
+            {{- toYaml $svc.command | nindent 12 }}
+          {{- end }}
+          {{- if $svc.args }}
+          args:
+            {{- toYaml $svc.args | nindent 12 }}
+          {{- end }}
+          {{- if $svc.port }}
+          ports:
+            - containerPort: {{ $svc.containerPort | default $svc.port }}
+          {{- end }}
+          {{- if $svc.env }}
+          env:
+            {{- range $k, $v := $svc.env }}
+            - name: {{ $k }}
+              value: {{ $v | quote }}
+            {{- end }}
+          {{- end }}
+{{- end }}
+{{- end }}
