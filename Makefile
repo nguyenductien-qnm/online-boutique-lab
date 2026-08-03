@@ -55,19 +55,20 @@ bootstrap-gitops: check-kind-context validate-gitops
 
 refresh-ecr-secret: check-kind-context
 	@command -v aws >/dev/null || { echo "aws CLI is required"; exit 1; }
-	@command -v docker >/dev/null || { echo "Docker is required"; exit 1; }
 	@kubectl --context "$(KUBE_CONTEXT)" get namespace "$(APP_NAMESPACE)" >/dev/null || { \
 		echo "Namespace $(APP_NAMESPACE) does not exist; commit and sync GitOps manifests first"; \
 		exit 1; \
 	}
 	@set -euo pipefail; \
-		task_docker_config="$$(mktemp -d)"; \
-		trap 'rm -rf "$$task_docker_config"' EXIT; \
-		aws ecr get-login-password --region "$(AWS_REGION)" --profile "$(AWS_PROFILE)" | \
-			DOCKER_CONFIG="$$task_docker_config" docker login --username AWS --password-stdin "$(ECR_REGISTRY)"; \
+		umask 077; \
+		task_secret_dir="$$(mktemp -d)"; \
+		trap 'rm -rf "$$task_secret_dir"' EXIT; \
+		ecr_password="$$(aws ecr get-login-password --region "$(AWS_REGION)" --profile "$(AWS_PROFILE)")"; \
+		ecr_auth="$$(printf 'AWS:%s' "$$ecr_password" | base64 | tr -d '\n')"; \
+		printf '{"auths":{"%s":{"auth":"%s"}}}\n' "$(ECR_REGISTRY)" "$$ecr_auth" > "$$task_secret_dir/config.json"; \
 		kubectl create secret generic "$(ECR_SECRET_NAME)" \
 			--namespace "$(APP_NAMESPACE)" \
-			--from-file=.dockerconfigjson="$$task_docker_config/config.json" \
+			--from-file=.dockerconfigjson="$$task_secret_dir/config.json" \
 			--type=kubernetes.io/dockerconfigjson \
 			--dry-run=client \
 			--output=yaml | \
