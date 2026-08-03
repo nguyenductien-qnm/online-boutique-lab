@@ -1,0 +1,10 @@
+apiVersion: v2
+name: argocd-bootstrap
+description: Bootstrap Argo CD and root GitOps application
+type: application
+version: 0.1.0
+
+dependencies:
+  - name: argo-cd
+    version: 9.5.9
+    repository: https://argoproj.github.io/argo-helm
