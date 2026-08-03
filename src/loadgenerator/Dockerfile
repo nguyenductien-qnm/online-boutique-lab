@@ -12,41 +12,75 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Define a default value so it's not empty if the builder fails to provide it
-ARG BUILDPLATFORM=linux/amd64
+# =========================================================
+# Base image
+# =========================================================
 
-FROM --platform=$BUILDPLATFORM python:3.14.6-alpine@sha256:26730869004e2b9c4b9ad09cab8625e81d256d1ce97e72df5520e806b1709f92 AS base
+# Dùng target-platform base để native wheels khớp runtime architecture.
+FROM python:3.14.6-alpine@sha256:26730869004e2b9c4b9ad09cab8625e81d256d1ce97e72df5520e806b1709f92 AS base
 
+# =========================================================
+# Stage 1: Install dependencies
+# =========================================================
+
+# Builder dùng để cài Python dependencies và compile
+# các package có native extension.
 FROM base AS builder
 
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV PYTHONUNBUFFERED=1
+# Không tạo file .pyc và ghi log trực tiếp ra stdout/stderr.
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
 
-RUN apk update \
-    && apk add --no-cache g++ linux-headers \
-    && rm -rf /var/cache/apk/*
+# Cài compiler và Linux headers cho các package cần build.
+# Các build tools chỉ tồn tại trong builder.
+RUN apk add --no-cache \
+    g++ \
+    linux-headers
 
+WORKDIR /build
+
+# Copy dependency manifest trước để tận dụng Docker build cache.
 COPY requirements.txt .
 
-RUN pip install --prefix="/install" -r requirements.txt
+# Cài Python dependencies vào một thư mục riêng
+# để dễ copy sang runtime.
+RUN pip install \
+    --no-cache-dir \
+    --prefix=/install \
+    -r requirements.txt
 
-FROM base
+# =========================================================
+# Stage 2: Runtime
+# =========================================================
 
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV PYTHONUNBUFFERED=1
+# Runtime chỉ chứa Python, runtime libraries,
+# dependencies và Locust test script.
+FROM base AS runtime
 
-RUN apk update \
-    && apk add --no-cache libstdc++ \
-    && rm -rf /var/cache/apk/*
+# Không tạo file .pyc và ghi log trực tiếp ra stdout/stderr.
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    GEVENT_SUPPORT=True
+
+# Một số dependency cần C++ runtime khi chạy.
+RUN apk add --no-cache libstdc++
 
 WORKDIR /loadgen
 
-COPY --from=builder /install /usr/local
+# Copy Python dependencies từ builder.
+COPY --chown=10001:10001 \
+    --from=builder \
+    /install \
+    /usr/local
 
-# Add application code.
-COPY locustfile.py .
+# Copy Locust test definition.
+COPY --chown=10001:10001 \
+    locustfile.py \
+    .
 
-# enable gevent support in debugger
-ENV GEVENT_SUPPORT=True
+# Chạy application bằng UID/GID non-root.
+USER 10001:10001
 
-ENTRYPOINT locust --host="http://${FRONTEND_ADDR}" --headless -u "${USERS:-10}" -r "${RATE:-1}" 2>&1
+# Khởi động Locust ở chế độ headless.
+# FRONTEND_ADDR, USERS và RATE được truyền qua environment variables.
+ENTRYPOINT ["sh", "-c", "exec locust --host=\"http://${FRONTEND_ADDR}\" --headless -u \"${USERS:-10}\" -r \"${RATE:-1}\""]

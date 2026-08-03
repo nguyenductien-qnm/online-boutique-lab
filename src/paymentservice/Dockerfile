@@ -12,34 +12,52 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Define a default value so it's not empty if the builder fails to provide it
-ARG BUILDPLATFORM=linux/amd64
+# =========================================================
+# Stage 1: Install dependencies
+# =========================================================
 
-FROM --platform=$BUILDPLATFORM node:20.20.2-alpine@sha256:fb4cd12c85ee03686f6af5362a0b0d56d50c58a04632e6c0fb8363f609372293 AS builder
+# Native addons phải được compile cho target architecture.
+FROM node:20.20.2-alpine@sha256:fb4cd12c85ee03686f6af5362a0b0d56d50c58a04632e6c0fb8363f609372293 AS deps
 
-# Some packages (e.g. @google-cloud/profiler) require additional
-# deps for post-install scripts
-RUN apk add --update --no-cache \
+# Một số package cần Python, Make và C++ compiler
+# trong quá trình chạy post-install script.
+RUN apk add --no-cache \
     python3 \
     make \
     g++
 
 WORKDIR /usr/src/app
 
+# Copy dependency manifests trước để tận dụng Docker build cache.
 COPY package*.json ./
 
-RUN npm install --only=production
+# Cài production dependencies.
+# npm ci đảm bảo dependency đúng theo package-lock.json.
+RUN npm ci --omit=dev
 
-FROM alpine:3.24.1@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b
+# =========================================================
+# Stage 2: Runtime
+# =========================================================
 
-RUN apk add --no-cache nodejs
+# Dùng cùng phiên bản Node.js với stage dependency
+# để tránh lệch Node ABI với các native addon.
+FROM node:20.20.2-alpine@sha256:fb4cd12c85ee03686f6af5362a0b0d56d50c58a04632e6c0fb8363f609372293
 
 WORKDIR /usr/src/app
 
-COPY --from=builder /usr/src/app/node_modules ./node_modules
+# Copy production dependencies đã được cài từ stage trước.
+COPY --chown=10001:10001 \
+    --from=deps \
+    /usr/src/app/node_modules \
+    ./node_modules
 
-COPY . .
+# Copy source code vào runtime image.
+COPY --chown=10001:10001 . .
+
+# Chạy application bằng UID/GID non-root cố định.
+USER 10001:10001
 
 EXPOSE 50051
 
-ENTRYPOINT [ "node", "index.js" ]
+# Khởi động Node.js application.
+ENTRYPOINT ["node", "index.js"]

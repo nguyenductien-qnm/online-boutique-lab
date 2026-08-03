@@ -12,44 +12,73 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Define a default value so it's not empty if the builder fails to provide it
-ARG BUILDPLATFORM=linux/amd64
+# =========================================================
+# Base image
+# =========================================================
 
-FROM --platform=$BUILDPLATFORM python:3.14.6-alpine@sha256:26730869004e2b9c4b9ad09cab8625e81d256d1ce97e72df5520e806b1709f92 AS base
+# Dùng target-platform base để native wheels khớp runtime architecture.
+FROM python:3.14.6-alpine@sha256:26730869004e2b9c4b9ad09cab8625e81d256d1ce97e72df5520e806b1709f92 AS base
 
+# =========================================================
+# Stage 1: Install dependencies
+# =========================================================
+
+# Builder dùng để compile và cài Python dependencies.
 FROM base AS builder
 
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
 
-RUN apk update \
-    && apk add --no-cache g++ linux-headers \
-    && rm -rf /var/cache/apk/*
+# Cài compiler và Linux headers cho các package
+# có native extension.
+RUN apk add --no-cache \
+    g++ \
+    linux-headers
 
-# get packages
-COPY requirements.txt .
-RUN pip install -r requirements.txt
+WORKDIR /build
 
-FROM base
+# Copy dependency manifest trước để tận dụng Docker build cache.
+COPY requirements.txt ./
 
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV PYTHONUNBUFFERED=1
+# Cài dependencies vào một thư mục riêng
+# để dễ copy sang runtime image.
+RUN pip install \
+    --no-cache-dir \
+    --prefix=/install \
+    -r requirements.txt
 
-RUN apk update \
-    && apk add --no-cache libstdc++ \
-    && rm -rf /var/cache/apk/*
+# =========================================================
+# Stage 2: Runtime
+# =========================================================
 
-# get packages
+# Runtime chỉ chứa Python, runtime libraries,
+# dependencies và source code của application.
+FROM base AS runtime
+
+# Không tạo file .pyc và ghi log trực tiếp ra stdout/stderr.
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PORT=8080
+
+# Một số dependency đã compile trong builder
+# cần C++ runtime library khi chạy.
+RUN apk add --no-cache libstdc++
+
 WORKDIR /recommendationservice
 
-# Grab packages from builder
-COPY --from=builder /usr/local/lib/python3.14/ /usr/local/lib/python3.14/
+# Copy Python dependencies đã được cài từ builder.
+COPY --chown=10001:10001 \
+    --from=builder \
+    /install/ \
+    /usr/local/
 
-# Add the application
-COPY . .
+# Copy source code của application.
+COPY --chown=10001:10001 . .
 
-# set listen port
-ENV PORT="8080"
+# Chạy application bằng UID/GID non-root cố định.
+USER 10001:10001
+
 EXPOSE 8080
 
+# Khởi động Recommendation service.
 ENTRYPOINT ["python", "recommendation_server.py"]

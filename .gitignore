@@ -6,6 +6,7 @@
 .project
 .skaffold-*.yaml
 .terraform.lock.hcl
+!infra/ecr/.terraform.lock.hcl
 .terraform/*
 .venv/
 .vs/

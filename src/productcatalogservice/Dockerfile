@@ -12,33 +12,80 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Define a default value so it's not empty if the builder fails to provide it
-ARG BUILDPLATFORM=linux/amd64
+# Platform dùng để chạy stage build.
+# Docker Buildx thường tự động truyền giá trị phù hợp.
+ARG BUILDPLATFORM
 
-FROM --platform=$BUILDPLATFORM golang:1.26.4-alpine@sha256:3ad57304ad93bbec8548a0437ad9e06a455660655d9af011d58b993f6f615648 AS builder
-ARG TARGETOS=linux
-ARG TARGETARCH=amd64
+# =========================================================
+# Stage 1: Build
+# =========================================================
+
+# Dùng Go SDK để tải dependency và build binary.
+FROM --platform=$BUILDPLATFORM \
+    golang:1.26.4-alpine@sha256:3ad57304ad93bbec8548a0437ad9e06a455660655d9af011d58b993f6f615648 \
+    AS builder
+
+# Hệ điều hành và kiến trúc CPU mà binary sẽ chạy trên.
+# Docker Buildx thường tự truyền TARGETOS và TARGETARCH.
+ARG TARGETOS
+ARG TARGETARCH
 
 WORKDIR /src
-# restore dependencies
+
+# Copy dependency manifests trước để tận dụng Docker build cache.
 COPY go.mod go.sum ./
+
+# Download Go modules.
+# Layer này được tái sử dụng nếu go.mod/go.sum không thay đổi.
 RUN go mod download
+
+# Copy toàn bộ source code sau khi dependency đã được download.
 COPY . .
 
-# Skaffold passes in debug-oriented compiler flags
+# Skaffold truyền compiler flags khi chạy ở chế độ debug.
 ARG SKAFFOLD_GO_GCFLAGS
-RUN GOOS=${TARGETOS} GOARCH=${TARGETARCH} CGO_ENABLED=0 go build -ldflags="-s -w" -gcflags="${SKAFFOLD_GO_GCFLAGS}" -o /productcatalogservice .
 
+# Build static binary cho đúng OS và CPU architecture.
+# - CGO_ENABLED=0: không phụ thuộc thư viện C động.
+# - -ldflags="-s -w": loại bỏ symbol và debug metadata.
+# - Output binary: /productcatalogservice
+RUN GOOS=${TARGETOS} \
+    GOARCH=${TARGETARCH} \
+    CGO_ENABLED=0 \
+    go build \
+    -ldflags="-s -w" \
+    -gcflags="${SKAFFOLD_GO_GCFLAGS}" \
+    -o /productcatalogservice \
+    .
+
+# =========================================================
+# Stage 2: Runtime
+# =========================================================
+
+# Runtime image tối giản, không chứa shell, package manager,
+# Go SDK, source code hoặc build cache.
 FROM gcr.io/distroless/static
 
-WORKDIR /src
-COPY --from=builder /productcatalogservice ./server
-COPY products.json .
+WORKDIR /app
 
-# Definition of this variable is used by 'skaffold debug' to identify a golang binary.
-# Default behavior - a failure prints a stack trace for the current goroutine.
-# See https://golang.org/pkg/runtime/
+# Copy binary đã build từ builder.
+COPY --chown=10001:10001 \
+    --from=builder \
+    /productcatalogservice \
+    /app/server
+
+# Copy dữ liệu sản phẩm cần được application đọc khi runtime.
+COPY --chown=10001:10001 \
+    products.json \
+    /app/products.json
+
+# Thiết lập cách Go in stack trace khi application panic.
 ENV GOTRACEBACK=single
 
+# Chạy application bằng UID/GID non-root cố định.
+USER 10001:10001
+
 EXPOSE 3550
-ENTRYPOINT ["/src/server"]
+
+# Khởi động Product Catalog service.
+ENTRYPOINT ["/app/server"]

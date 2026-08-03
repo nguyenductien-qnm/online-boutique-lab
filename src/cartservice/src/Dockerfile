@@ -12,33 +12,77 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Define a default value so it's not empty if the builder fails to provide it
-ARG BUILDPLATFORM=linux/amd64
+# Platform dùng để chạy stage build.
+# Docker Buildx thường tự động truyền giá trị phù hợp.
+ARG BUILDPLATFORM
 
-# https://mcr.microsoft.com/product/dotnet/sdk
-FROM --platform=$BUILDPLATFORM mcr.microsoft.com/dotnet/sdk:10.0.100-noble@sha256:c7445f141c04f1a6b454181bd098dcfa606c61ba0bd213d0a702489e5bd4cd71 AS builder
-ARG TARGETARCH=amd64
+# =========================================================
+# Stage 1: Build
+# =========================================================
+
+# Dùng .NET SDK để restore dependency và publish application.
+FROM --platform=$BUILDPLATFORM \
+    mcr.microsoft.com/dotnet/sdk:10.0.100-noble@sha256:c7445f141c04f1a6b454181bd098dcfa606c61ba0bd213d0a702489e5bd4cd71 \
+    AS builder
+
+# Kiến trúc CPU mà artifact sẽ chạy trên.
+# Docker Buildx thường tự truyền amd64 hoặc arm64.
+ARG TARGETARCH
+
 WORKDIR /app
-COPY cartservice.csproj .
+
+# Copy file project trước để tận dụng Docker build cache.
+COPY cartservice.csproj ./
+
+# Restore NuGet dependencies cho kiến trúc đích.
+# Layer này được tái sử dụng nếu file .csproj không thay đổi.
 RUN dotnet restore cartservice.csproj \
-    -a $TARGETARCH
+    -a ${TARGETARCH}
+
+# Copy toàn bộ source code sau khi dependency đã được restore.
 COPY . .
+
+# Publish application ở chế độ Release.
+# - Build executable self-contained
+# - Đóng gói thành single file
+# - Loại bỏ các thành phần không sử dụng
+# - Xuất artifact vào /cartservice
 RUN dotnet publish cartservice.csproj \
-    -p:PublishSingleFile=true \
-    -a $TARGETARCH \
+    -c Release \
+    -a ${TARGETARCH} \
     --self-contained true \
+    -p:PublishSingleFile=true \
     -p:PublishTrimmed=true \
     -p:TrimMode=full \
-    -c release \
     -o /cartservice
 
-# https://mcr.microsoft.com/product/dotnet/runtime-deps
+# =========================================================
+# Stage 2: Runtime
+# =========================================================
+
+# Runtime image tối giản, chỉ chứa OS dependencies.
+# Không chứa .NET SDK, source code hoặc NuGet cache.
 FROM mcr.microsoft.com/dotnet/runtime-deps:10.0.0-noble-chiseled@sha256:b857c8cb8d929183cfe4c6dd9994abba92a2639dd2dbaf06005379f815991604
 
 WORKDIR /app
-COPY --from=builder /cartservice .
-EXPOSE 7070
+
+# Chỉ copy artifact đã publish từ builder.
+# Gán quyền sở hữu cho UID/GID non-root cố định.
+COPY --chown=10001:10001 \
+    --from=builder \
+    /cartservice/ \
+    /app/
+
+# Cấu hình ASP.NET Core lắng nghe trên port 7070.
+# Tắt .NET diagnostics trong runtime production.
 ENV DOTNET_EnableDiagnostics=0 \
     ASPNETCORE_HTTP_PORTS=7070
-USER 1000
+
+# Chạy application bằng UID/GID non-root.
+# Không cần tạo user hoặc group bên trong image.
+USER 10001:10001
+
+EXPOSE 7070
+
+# Chạy executable self-contained đã được publish.
 ENTRYPOINT ["/app/cartservice"]

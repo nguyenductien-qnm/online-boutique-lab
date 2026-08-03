@@ -12,36 +12,71 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Define a default value so it's not empty if the builder fails to provide it
-ARG BUILDPLATFORM=linux/amd64
+# =========================================================
+# Base image
+# =========================================================
 
-FROM --platform=$BUILDPLATFORM python:3.14.6-slim@sha256:b877e50bd90de10af8d82c57a022fc2e0dc731c5320d762a27986facfc3355c1 AS base
+# Dùng target-platform base để native wheels khớp runtime architecture.
+FROM python:3.14.6-slim@sha256:b877e50bd90de10af8d82c57a022fc2e0dc731c5320d762a27986facfc3355c1 AS base
 
+# =========================================================
+# Stage 1: Install dependencies
+# =========================================================
+
+# Builder dùng để compile và cài các Python dependency.
 FROM base AS builder
 
-RUN apt-get -qq update \
+# Cài C++ compiler cho các package có native extension.
+# Compiler chỉ tồn tại trong builder, không được đưa vào runtime.
+RUN apt-get update \
     && apt-get install -y --no-install-recommends g++ \
     && rm -rf /var/lib/apt/lists/*
 
-# get packages
-COPY requirements.txt .
-RUN pip install -r requirements.txt
+WORKDIR /build
 
-FROM base
-# Enable unbuffered logging
-ENV PYTHONUNBUFFERED=1
+# Tạo virtual environment riêng để dễ copy sang runtime.
+RUN python -m venv /opt/venv
 
-# get packages
+# Ưu tiên sử dụng Python và pip bên trong virtual environment.
+ENV PATH="/opt/venv/bin:${PATH}"
+
+# Copy dependency manifest trước để tận dụng Docker build cache.
+COPY requirements.txt ./
+
+# Cài Python dependencies vào virtual environment.
+# Layer này được tái sử dụng nếu requirements.txt không thay đổi.
+RUN pip install --no-cache-dir \
+    -r requirements.txt
+
+# =========================================================
+# Stage 2: Runtime
+# =========================================================
+
+# Runtime chỉ chứa Python, application và dependencies.
+# Không chứa compiler hoặc build tools.
+FROM base AS runtime
+
 WORKDIR /shoppingassistantservice
 
-# Grab packages from builder
-COPY --from=builder /usr/local/lib/python3.14/ /usr/local/lib/python3.14/
+# Copy virtual environment đã được chuẩn bị từ builder.
+COPY --chown=10001:10001 \
+    --from=builder \
+    /opt/venv \
+    /opt/venv
 
-# Add the application
-COPY . .
+# Copy source code của application.
+COPY --chown=10001:10001 . .
 
-# set listen port
-ENV PORT="8080"
+# Sử dụng Python và packages trong virtual environment.
+# PYTHONUNBUFFERED giúp log được ghi ngay ra stdout/stderr.
+ENV PATH="/opt/venv/bin:${PATH}" \
+    PYTHONUNBUFFERED=1 \
+    PORT=8080
+
+# Chạy application bằng UID/GID non-root cố định.
+USER 10001:10001
+
 EXPOSE 8080
 
+# Khởi động Shopping Assistant service.
 ENTRYPOINT ["python", "shoppingassistantservice.py"]

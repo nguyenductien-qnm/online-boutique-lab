@@ -12,33 +12,76 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Define a default value so it's not empty if the builder fails to provide it
-ARG BUILDPLATFORM=linux/amd64
+# Platform dùng để chạy stage build.
+# Docker Buildx thường tự động truyền giá trị phù hợp.
+ARG BUILDPLATFORM
 
-FROM --platform=$BUILDPLATFORM golang:1.26.4-alpine@sha256:3ad57304ad93bbec8548a0437ad9e06a455660655d9af011d58b993f6f615648 AS builder
-ARG TARGETOS=linux
-ARG TARGETARCH=amd64
+# =========================================================
+# Stage 1: Build
+# =========================================================
+
+# Dùng Go SDK để download dependency và build binary.
+FROM --platform=$BUILDPLATFORM \
+    golang:1.26.4-alpine@sha256:3ad57304ad93bbec8548a0437ad9e06a455660655d9af011d58b993f6f615648 \
+    AS builder
+
+# Hệ điều hành và kiến trúc CPU mà binary sẽ chạy trên.
+# Docker Buildx thường tự truyền TARGETOS và TARGETARCH.
+ARG TARGETOS
+ARG TARGETARCH
+
 WORKDIR /src
 
-# restore dependencies
+# Copy dependency manifests trước để tận dụng Docker build cache.
 COPY go.mod go.sum ./
+
+# Download Go modules.
+# Layer này được tái sử dụng nếu go.mod/go.sum không thay đổi.
 RUN go mod download
 
+# Copy toàn bộ source code sau khi dependency đã được download.
 COPY . .
 
-# Skaffold passes in debug-oriented compiler flags
+# Skaffold truyền compiler flags khi chạy ở chế độ debug.
 ARG SKAFFOLD_GO_GCFLAGS
-RUN GOOS=${TARGETOS} GOARCH=${TARGETARCH} CGO_ENABLED=0 go build -ldflags="-s -w" -gcflags="${SKAFFOLD_GO_GCFLAGS}" -o /checkoutservice .
 
-FROM gcr.io/distroless/static
+# Build static binary cho đúng OS và CPU architecture.
+# - CGO_ENABLED=0: không phụ thuộc thư viện C động.
+# - -ldflags="-s -w": loại bỏ symbol/debug metadata để giảm kích thước.
+# - Output: /checkoutservice
+RUN GOOS=${TARGETOS} \
+    GOARCH=${TARGETARCH} \
+    CGO_ENABLED=0 \
+    go build \
+    -ldflags="-s -w" \
+    -gcflags="${SKAFFOLD_GO_GCFLAGS}" \
+    -o /checkoutservice \
+    .
 
-WORKDIR /src
-COPY --from=builder /checkoutservice /src/checkoutservice
+# =========================================================
+# Stage 2: Runtime
+# =========================================================
 
-# Definition of this variable is used by 'skaffold debug' to identify a golang binary.
-# Default behavior - a failure prints a stack trace for the current goroutine.
-# See https://golang.org/pkg/runtime/
+# Runtime image tối giản và mặc định chạy non-root.
+# Không chứa shell, package manager, Go SDK hoặc source code.
+FROM gcr.io/distroless/static:nonroot
+
+WORKDIR /app
+
+# Chỉ copy binary đã build từ builder.
+# Distroless nonroot dùng UID/GID 65532.
+COPY --chown=65532:65532 \
+    --from=builder \
+    /checkoutservice \
+    /app/checkoutservice
+
+# Chạy process bằng UID/GID non-root.
+USER 65532:65532
+
+# Thiết lập cách Go in stack trace khi application panic.
 ENV GOTRACEBACK=single
 
 EXPOSE 5050
-ENTRYPOINT ["/src/checkoutservice"]
+
+# Khởi động static binary.
+ENTRYPOINT ["/app/checkoutservice"]
