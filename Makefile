@@ -5,10 +5,16 @@ ARGOCD_NAMESPACE := argocd
 ARGOCD_RELEASE := argocd-bootstrap
 ARGOCD_REPOSITORY_NAME := argo
 ARGOCD_REPOSITORY_URL := https://argoproj.github.io/argo-helm
+AWS_ACCOUNT_ID := 730335441285
+AWS_PROFILE ?= default
+AWS_REGION := ap-southeast-1
+ECR_REGISTRY := $(AWS_ACCOUNT_ID).dkr.ecr.$(AWS_REGION).amazonaws.com
+ECR_SECRET_NAME := ecr-registry
 GITOPS_ROOT := gitops/clusters/local
+APP_NAMESPACE := online-boutique
 KUBE_CONTEXT ?= $(shell kubectl config current-context 2>/dev/null)
 
-.PHONY: argocd-repository argocd-dependencies validate-gitops check-kind-context bootstrap-gitops
+.PHONY: argocd-repository argocd-dependencies validate-gitops check-kind-context bootstrap-gitops refresh-ecr-secret
 
 argocd-repository:
 	helm repo add $(ARGOCD_REPOSITORY_NAME) $(ARGOCD_REPOSITORY_URL) --force-update
@@ -46,3 +52,23 @@ bootstrap-gitops: check-kind-context validate-gitops
 		--rollback-on-failure \
 		--wait \
 		--timeout 10m
+
+refresh-ecr-secret: check-kind-context
+	@command -v aws >/dev/null || { echo "aws CLI is required"; exit 1; }
+	@command -v docker >/dev/null || { echo "Docker is required"; exit 1; }
+	@kubectl --context "$(KUBE_CONTEXT)" get namespace "$(APP_NAMESPACE)" >/dev/null || { \
+		echo "Namespace $(APP_NAMESPACE) does not exist; commit and sync GitOps manifests first"; \
+		exit 1; \
+	}
+	@set -euo pipefail; \
+		task_docker_config="$$(mktemp -d)"; \
+		trap 'rm -rf "$$task_docker_config"' EXIT; \
+		aws ecr get-login-password --region "$(AWS_REGION)" --profile "$(AWS_PROFILE)" | \
+			DOCKER_CONFIG="$$task_docker_config" docker login --username AWS --password-stdin "$(ECR_REGISTRY)"; \
+		kubectl create secret generic "$(ECR_SECRET_NAME)" \
+			--namespace "$(APP_NAMESPACE)" \
+			--from-file=.dockerconfigjson="$$task_docker_config/config.json" \
+			--type=kubernetes.io/dockerconfigjson \
+			--dry-run=client \
+			--output=yaml | \
+		kubectl --context "$(KUBE_CONTEXT)" apply --filename=-
