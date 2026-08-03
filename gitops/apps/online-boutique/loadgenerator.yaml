@@ -1,0 +1,24 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: loadgenerator
+spec:
+  selector:
+    matchLabels:
+      app: loadgenerator
+  template:
+    metadata:
+      labels:
+        app: loadgenerator
+    spec:
+      serviceAccountName: online-boutique
+      containers:
+        - name: loadgenerator
+          image: 730335441285.dkr.ecr.ap-southeast-1.amazonaws.com/online-boutique/loadgenerator:6dbead2cda359b8d3b85d7628ddc28f7414bde57-30780838023
+          env:
+            - name: FRONTEND_ADDR
+              value: frontend:80
+            - name: USERS
+              value: "10"
+            - name: RATE
+              value: "1"
