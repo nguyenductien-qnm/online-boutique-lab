@@ -1,8 +1,7 @@
-{{- if .Values.rootApplication.enabled }}
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: root
+  name: online-boutique
   namespace: argocd
 spec:
   project: default
@@ -10,11 +9,15 @@ spec:
   source:
     repoURL: https://github.com/nguyenductien-qnm/online-boutique-lab.git
     targetRevision: main
-    path: gitops/clusters/local
+    path: gitops/workloads/online-boutique
+    helm:
+      valueFiles:
+        - values.yaml
+        - values-images.yaml
 
   destination:
     server: https://kubernetes.default.svc
-    namespace: argocd
+    namespace: online-boutique
 
   syncPolicy:
     automated:
@@ -22,4 +25,3 @@ spec:
       selfHeal: true
     syncOptions:
       - CreateNamespace=true
-{{- end }}

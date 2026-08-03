@@ -1,7 +1,7 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: online-boutique
+  name: root
   namespace: argocd
 spec:
   project: default
@@ -9,15 +9,11 @@ spec:
   source:
     repoURL: https://github.com/nguyenductien-qnm/online-boutique-lab.git
     targetRevision: main
-    path: gitops/apps/chart
-    helm:
-      valueFiles:
-        - values.yaml
-        - values-images.yaml
+    path: gitops/argocd/applications
 
   destination:
     server: https://kubernetes.default.svc
-    namespace: online-boutique
+    namespace: argocd
 
   syncPolicy:
     automated:

@@ -10,7 +10,9 @@ AWS_PROFILE ?= default
 AWS_REGION := ap-southeast-1
 ECR_REGISTRY := $(AWS_ACCOUNT_ID).dkr.ecr.$(AWS_REGION).amazonaws.com
 ECR_SECRET_NAME := ecr-registry
-GITOPS_ROOT := gitops/clusters/local
+ROOT_APPLICATION := gitops/argocd/root-application.yaml
+ARGOCD_APPLICATIONS_DIR := gitops/argocd/applications
+WORKLOAD_CHART_DIR := gitops/workloads/online-boutique
 APP_NAMESPACE := online-boutique
 KUBE_CONTEXT ?= $(shell kubectl config current-context 2>/dev/null)
 
@@ -26,13 +28,14 @@ validate-gitops: argocd-dependencies
 	helm lint $(ARGOCD_CHART_DIR)
 	helm template $(ARGOCD_RELEASE) $(ARGOCD_CHART_DIR) \
 		--namespace $(ARGOCD_NAMESPACE) >/dev/null
-	helm lint gitops/apps/chart
-	helm template online-boutique gitops/apps/chart \
+	helm lint $(WORKLOAD_CHART_DIR) \
+		-f $(WORKLOAD_CHART_DIR)/values.yaml \
+		-f $(WORKLOAD_CHART_DIR)/values-images.yaml
+	helm template online-boutique $(WORKLOAD_CHART_DIR) \
 		--namespace $(APP_NAMESPACE) \
-		-f gitops/apps/chart/values.yaml \
-		-f gitops/apps/chart/values-images.yaml >/dev/null
-
-
+		-f $(WORKLOAD_CHART_DIR)/values.yaml \
+		-f $(WORKLOAD_CHART_DIR)/values-images.yaml >/dev/null
+	kubectl kustomize $(ARGOCD_APPLICATIONS_DIR) >/dev/null
 
 check-kind-context:
 	@test -n "$(KUBE_CONTEXT)" || { echo "Kubernetes context is not set"; exit 1; }
@@ -47,17 +50,15 @@ bootstrap-gitops: check-kind-context validate-gitops
 		--kube-context "$(KUBE_CONTEXT)" \
 		--namespace $(ARGOCD_NAMESPACE) \
 		--create-namespace \
-		--set rootApplication.enabled=false \
 		--rollback-on-failure \
 		--wait \
 		--timeout 10m
-	helm upgrade $(ARGOCD_RELEASE) $(ARGOCD_CHART_DIR) \
-		--kube-context "$(KUBE_CONTEXT)" \
-		--namespace $(ARGOCD_NAMESPACE) \
-		--set rootApplication.enabled=true \
-		--rollback-on-failure \
-		--wait \
-		--timeout 10m
+	kubectl --context "$(KUBE_CONTEXT)" wait \
+		--for=condition=Established \
+		crd/applications.argoproj.io \
+		--timeout=2m
+	kubectl --context "$(KUBE_CONTEXT)" apply \
+		--filename "$(ROOT_APPLICATION)"
 
 refresh-ecr-secret: check-kind-context
 	@command -v aws >/dev/null || { echo "aws CLI is required"; exit 1; }
