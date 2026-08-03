@@ -30,6 +30,13 @@ bootstrap-gitops: check-kind-context validate-gitops
 		--kube-context "$(KUBE_CONTEXT)" \
 		--namespace $(ARGOCD_NAMESPACE) \
 		--create-namespace \
-		--atomic \
+		--set rootApplication.enabled=false \
+		--rollback-on-failure \
+		--wait \
+		--timeout 10m
+	helm upgrade $(ARGOCD_RELEASE) $(ARGOCD_CHART_DIR) \
+		--kube-context "$(KUBE_CONTEXT)" \
+		--namespace $(ARGOCD_NAMESPACE) \
+		--rollback-on-failure \
 		--wait \
 		--timeout 10m

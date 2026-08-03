@@ -1,3 +1,6 @@
 argo-cd:
   crds:
     install: true
+
+rootApplication:
+  enabled: true
