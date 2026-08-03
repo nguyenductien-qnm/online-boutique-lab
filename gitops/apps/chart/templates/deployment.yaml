@@ -17,6 +17,8 @@ spec:
         app: {{ $name }}
     spec:
       serviceAccountName: {{ if $.Values.serviceAccount }}{{ $.Values.serviceAccount.name | default "online-boutique" }}{{ else }}"online-boutique"{{ end }}
+      imagePullSecrets:
+        - name: {{ $.Values.imagePullSecret | default "ecr-registry" }}
       containers:
         - name: {{ $name }}
           {{- if and $svc.image $svc.image.repository $svc.image.tag }}
