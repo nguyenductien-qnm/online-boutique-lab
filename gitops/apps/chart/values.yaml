@@ -34,6 +34,7 @@ services:
     port: 7000
     env:
       PORT: "7000"
+      DISABLE_PROFILER: "1"
 
   emailservice:
     enabled: true
@@ -70,6 +71,7 @@ services:
     port: 50051
     env:
       PORT: "50051"
+      DISABLE_PROFILER: "1"
 
   productcatalogservice:
     enabled: true
