@@ -26,7 +26,13 @@ validate-gitops: argocd-dependencies
 	helm lint $(ARGOCD_CHART_DIR)
 	helm template $(ARGOCD_RELEASE) $(ARGOCD_CHART_DIR) \
 		--namespace $(ARGOCD_NAMESPACE) >/dev/null
-	kubectl kustomize $(GITOPS_ROOT) >/dev/null
+	helm lint gitops/apps/chart
+	helm template online-boutique gitops/apps/chart \
+		--namespace $(APP_NAMESPACE) \
+		-f gitops/apps/chart/values.yaml \
+		-f gitops/apps/chart/values-images.yaml >/dev/null
+
+
 
 check-kind-context:
 	@test -n "$(KUBE_CONTEXT)" || { echo "Kubernetes context is not set"; exit 1; }
