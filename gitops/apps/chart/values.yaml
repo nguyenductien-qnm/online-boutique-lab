@@ -32,6 +32,8 @@ services:
   currencyservice:
     enabled: true
     port: 7000
+    env:
+      PORT: "7000"
 
   emailservice:
     enabled: true
@@ -66,6 +68,8 @@ services:
   paymentservice:
     enabled: true
     port: 50051
+    env:
+      PORT: "50051"
 
   productcatalogservice:
     enabled: true
