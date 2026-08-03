@@ -5,4 +5,4 @@ namespace: online-boutique
 
 resources:
   - namespace.yaml
-  - ../../apps/online-boutique
+  - ../../apps
