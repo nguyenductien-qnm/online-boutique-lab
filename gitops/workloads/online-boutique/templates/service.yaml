@@ -12,7 +12,8 @@ spec:
   selector:
     app: {{$name}}
   ports:
-    - port: {{$svc.port}}
+    - name: {{$svc.portName | default "tcp"}}
+      port: {{$svc.port}}
       targetPort: {{$svc.containerPort | default $svc.port}}
 {{- end}}
 {{- end}}

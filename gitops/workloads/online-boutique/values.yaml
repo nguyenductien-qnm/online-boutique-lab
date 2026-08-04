@@ -44,6 +44,11 @@ services:
     enabled: true
     containerPort: 8080
     port: 80
+    portName: "http"
+    metrics:
+      enabled: true
+      path: "/metrics"
+      interval: "30s"
     env:
       PORT: "8080"
       PRODUCT_CATALOG_SERVICE_ADDR: "productcatalogservice:3550"
