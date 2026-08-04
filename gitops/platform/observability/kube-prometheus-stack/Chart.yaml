@@ -1,0 +1,10 @@
+apiVersion: v2
+name: kube-prometheus-stack-wrapper
+description: Wrapper chart for kube-prometheus-stack managed by Argo CD
+type: application
+version: 0.1.0
+
+dependencies:
+  - name: kube-prometheus-stack
+    version: 86.0.1
+    repository: https://prometheus-community.github.io/helm-charts

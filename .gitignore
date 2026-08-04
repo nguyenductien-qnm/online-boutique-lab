@@ -30,3 +30,4 @@ release/wi-kubernetes-manifests.yaml
 vendor/
 gha-creds-*.json
 .codegraph
+gitops/platform/observability/kube-prometheus-stack/charts/
