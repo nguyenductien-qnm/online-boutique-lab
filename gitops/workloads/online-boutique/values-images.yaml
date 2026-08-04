@@ -27,7 +27,7 @@ services:
   frontend:
     image:
       repository: "730335441285.dkr.ecr.ap-southeast-1.amazonaws.com/online-boutique/frontend"
-      tag: "6dbead2cda359b8d3b85d7628ddc28f7414bde57-30780838023"
+      tag: "74d840f0512c543b7e9111fc5f00fd9bc363e849-30897803824"
 
   loadgenerator:
     image:
