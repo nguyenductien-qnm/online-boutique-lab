@@ -1,8 +1,17 @@
 name: Build ARM64 images
 
-run-name: Build ARM64 (${{ inputs.build_all && 'all services' || inputs.services }})
+run-name: >-
+  Build ARM64 images (${{ github.event_name == 'workflow_dispatch'
+    && (inputs.build_all && 'all services' || inputs.services)
+    || github.sha }})
 
 on:
+  push:
+    branches:
+      - main
+    paths:
+      - "src/**"
+
   workflow_dispatch:
     inputs:
       build_all:
@@ -16,6 +25,10 @@ on:
         default: ""
         type: string
 
+concurrency:
+  group: build-images-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
@@ -24,76 +37,124 @@ jobs:
     name: Prepare build matrix
     runs-on: ubuntu-latest
     outputs:
+      count: ${{ steps.matrix.outputs.count }}
       matrix: ${{ steps.matrix.outputs.matrix }}
+      services: ${{ steps.matrix.outputs.services }}
     steps:
-      - name: Validate selection
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Select services
         id: matrix
         env:
+          BEFORE_SHA: ${{ github.event.before }}
           BUILD_ALL: ${{ inputs.build_all }}
+          CURRENT_SHA: ${{ github.sha }}
+          EVENT_NAME: ${{ github.event_name }}
           REQUESTED_SERVICES: ${{ inputs.services }}
         shell: bash
         run: |
-          if [[ "$GITHUB_REF" != "refs/heads/main" ]]; then
-            echo "::error::Run this workflow from the main branch"
-            exit 1
-          fi
+          set -euo pipefail
 
           catalog='[
-            {"service":"adservice","context":"src/adservice"},
-            {"service":"cartservice","context":"src/cartservice/src"},
-            {"service":"checkoutservice","context":"src/checkoutservice"},
-            {"service":"currencyservice","context":"src/currencyservice"},
-            {"service":"emailservice","context":"src/emailservice"},
-            {"service":"frontend","context":"src/frontend"},
-            {"service":"loadgenerator","context":"src/loadgenerator"},
-            {"service":"paymentservice","context":"src/paymentservice"},
-            {"service":"productcatalogservice","context":"src/productcatalogservice"},
-            {"service":"recommendationservice","context":"src/recommendationservice"},
-            {"service":"shippingservice","context":"src/shippingservice"},
-            {"service":"shoppingassistantservice","context":"src/shoppingassistantservice"}
+            {"service":"adservice","context":"src/adservice","watch":"src/adservice"},
+            {"service":"cartservice","context":"src/cartservice/src","watch":"src/cartservice"},
+            {"service":"checkoutservice","context":"src/checkoutservice","watch":"src/checkoutservice"},
+            {"service":"currencyservice","context":"src/currencyservice","watch":"src/currencyservice"},
+            {"service":"emailservice","context":"src/emailservice","watch":"src/emailservice"},
+            {"service":"frontend","context":"src/frontend","watch":"src/frontend"},
+            {"service":"loadgenerator","context":"src/loadgenerator","watch":"src/loadgenerator"},
+            {"service":"paymentservice","context":"src/paymentservice","watch":"src/paymentservice"},
+            {"service":"productcatalogservice","context":"src/productcatalogservice","watch":"src/productcatalogservice"},
+            {"service":"recommendationservice","context":"src/recommendationservice","watch":"src/recommendationservice"},
+            {"service":"shippingservice","context":"src/shippingservice","watch":"src/shippingservice"},
+            {"service":"shoppingassistantservice","context":"src/shoppingassistantservice","watch":"src/shoppingassistantservice"}
           ]'
 
           allowed=$(jq -c '[.[].service]' <<<"$catalog")
 
-          if [[ "$BUILD_ALL" == "true" ]]; then
-            selected="$allowed"
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            if [[ "$GITHUB_REF" != "refs/heads/main" ]]; then
+              echo "::error::Run this workflow from the main branch"
+              exit 1
+            fi
+
+            if [[ "$BUILD_ALL" == "true" ]]; then
+              selected="$allowed"
+            else
+              selected=$(jq -cn --arg value "$REQUESTED_SERVICES" \
+                '$value
+                | split(",")
+                | map(gsub("^\\s+|\\s+$"; ""))
+                | map(select(length > 0))
+                | unique')
+
+              if [[ "$(jq length <<<"$selected")" -eq 0 ]]; then
+                echo "::error::Select build_all or provide at least one service"
+                exit 1
+              fi
+
+              unknown=$(jq -cn \
+                --argjson selected "$selected" \
+                --argjson allowed "$allowed" \
+                '$selected - $allowed')
+              if [[ "$(jq length <<<"$unknown")" -ne 0 ]]; then
+                echo "::error::Unknown services: $(jq -r 'join(", ")' <<<"$unknown")"
+                exit 1
+              fi
+            fi
           else
-            selected=$(jq -cn --arg value "$REQUESTED_SERVICES" \
-              '$value | split(",") | map(gsub("^\\s+|\\s+$"; "")) | map(select(length > 0)) | unique')
-
-            if [[ "$(jq length <<<"$selected")" -eq 0 ]]; then
-              echo "::error::Select build_all or enter at least one service"
-              exit 1
+            if [[ -z "$BEFORE_SHA" || "$BEFORE_SHA" =~ ^0+$ ]]; then
+              mapfile -t changed_files < <(
+                git diff-tree --root --no-commit-id --name-only -r "$CURRENT_SHA"
+              )
+            else
+              mapfile -t changed_files < <(
+                git diff --name-only "$BEFORE_SHA" "$CURRENT_SHA"
+              )
             fi
 
-            invalid=$(jq -cn --argjson selected "$selected" --argjson allowed "$allowed" \
-              '$selected - $allowed')
-
-            if [[ "$(jq length <<<"$invalid")" -ne 0 ]]; then
-              echo "::error::Unknown services: $(jq -r 'join(", ")' <<<"$invalid")"
-              exit 1
-            fi
+            selected='[]'
+            while IFS=$'\t' read -r service watch; do
+              for changed_file in "${changed_files[@]}"; do
+                if [[ "$changed_file" == "$watch/"* ]]; then
+                  selected=$(jq -c \
+                    --arg service "$service" \
+                    '. + [$service] | unique' <<<"$selected")
+                  break
+                fi
+              done
+            done < <(jq -r '.[] | [.service, .watch] | @tsv' <<<"$catalog")
           fi
 
-          matrix=$(jq -cn --argjson catalog "$catalog" --argjson selected "$selected" \
-            '{include: [$catalog[] | select(.service as $service | $selected | index($service))]}')
+          matrix=$(jq -cn \
+            --argjson catalog "$catalog" \
+            --argjson selected "$selected" \
+            '{include: [
+              $catalog[]
+              | select(.service as $service | $selected | index($service))
+              | {service, context}
+            ]}')
+          count=$(jq length <<<"$selected")
 
-          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+          echo "count=$count" >>"$GITHUB_OUTPUT"
+          echo "matrix=$matrix" >>"$GITHUB_OUTPUT"
+          echo "services=$selected" >>"$GITHUB_OUTPUT"
           echo "Selected services: $(jq -r 'join(", ")' <<<"$selected")"
 
   build:
     name: Build ${{ matrix.service }}
     needs: prepare
+    if: needs.prepare.outputs.count != '0'
     runs-on: ubuntu-latest
     permissions:
       contents: read
       id-token: write
-
     strategy:
       fail-fast: false
-      max-parallel: 4
       matrix: ${{ fromJSON(needs.prepare.outputs.matrix) }}
-
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -133,3 +194,110 @@ jobs:
           cache-to: type=gha,mode=max,scope=${{ matrix.service }}
           provenance: true
           sbom: true
+
+  bump-tags:
+    name: Bump GitOps image tags
+    needs:
+      - prepare
+      - build
+    if: >-
+      needs.prepare.outputs.count != '0'
+      && needs.build.result == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          ref: main
+
+      - name: Update image tags
+        env:
+          IMAGE_TAG: ${{ github.sha }}-${{ github.run_id }}
+          SELECTED_SERVICES: ${{ needs.prepare.outputs.services }}
+          VALUES_FILE: gitops/workloads/online-boutique/values-images.yaml
+        run: |
+          node <<'NODE'
+          const fs = require("fs");
+
+          const file = process.env.VALUES_FILE;
+          const imageTag = process.env.IMAGE_TAG;
+          const services = JSON.parse(process.env.SELECTED_SERVICES);
+          const original = fs.readFileSync(file, "utf8");
+          const trailingNewline = original.endsWith("\n");
+          const lines = original.split(/\r?\n/);
+
+          for (const service of services) {
+            const serviceLine = `  ${service}:`;
+            const start = lines.findIndex((line) => line === serviceLine);
+
+            if (start === -1) {
+              console.log(`${service}: no GitOps image entry; skipping tag bump`);
+              continue;
+            }
+
+            let end = lines.length;
+            for (let index = start + 1; index < lines.length; index += 1) {
+              if (/^  [a-z0-9-]+:\s*$/.test(lines[index])) {
+                end = index;
+                break;
+              }
+            }
+
+            let tagLine = -1;
+            for (let index = start + 1; index < end; index += 1) {
+              if (/^      tag:\s*/.test(lines[index])) {
+                tagLine = index;
+                break;
+              }
+            }
+
+            if (tagLine === -1) {
+              throw new Error(`${service}: image.tag not found in ${file}`);
+            }
+
+            lines[tagLine] = `      tag: "${imageTag}"`;
+            console.log(`${service}: ${imageTag}`);
+          }
+
+          let updated = lines.join("\n");
+          if (trailingNewline && !updated.endsWith("\n")) {
+            updated += "\n";
+          }
+          fs.writeFileSync(file, updated);
+          NODE
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+
+      - name: Validate Helm chart
+        run: |
+          helm lint gitops/workloads/online-boutique \
+            -f gitops/workloads/online-boutique/values.yaml \
+            -f gitops/workloads/online-boutique/values-images.yaml
+          helm template online-boutique \
+            gitops/workloads/online-boutique \
+            --namespace online-boutique \
+            -f gitops/workloads/online-boutique/values.yaml \
+            -f gitops/workloads/online-boutique/values-images.yaml \
+            >/dev/null
+
+      - name: Commit and push tags
+        env:
+          VALUES_FILE: gitops/workloads/online-boutique/values-images.yaml
+        run: |
+          set -euo pipefail
+
+          if git diff --quiet -- "$VALUES_FILE"; then
+            echo "No deployable image tags changed"
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "$VALUES_FILE"
+          git commit -m "chore(images): bump service tags"
+          git pull --rebase origin main
+          git push origin HEAD:main
