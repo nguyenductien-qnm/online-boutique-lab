@@ -148,6 +148,7 @@ func main() {
 	mustConnGRPC(ctx, &svc.adSvcConn, svc.adSvcAddr)
 
 	r := mux.NewRouter()
+	r.Use(registerHTTPMetrics(baseUrl+"/metrics", baseUrl+"/_healthz"))
 	r.Handle(baseUrl+"/metrics", promhttp.Handler()).Methods(http.MethodGet)
 	r.HandleFunc(baseUrl+"/", svc.homeHandler).Methods(http.MethodGet, http.MethodHead)
 	r.HandleFunc(baseUrl+"/product/{id}", svc.productHandler).Methods(http.MethodGet, http.MethodHead)
