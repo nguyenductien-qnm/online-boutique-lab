@@ -137,7 +137,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "sum(increase(frontend_http_requests_total{status_code=~\"5..\"}[$__rate_interval]))",
+          "expr": "sum(increase(frontend_http_requests_total{status_code=~\"5..\"}[$__rate_interval])) or on() vector(0)",
           "legendFormat": "Errors"
         }
       ],
@@ -226,7 +226,7 @@
       ],
       "options": {
         "reduceOptions": {
-          "values": true,
+          "values": false,
           "calcs": ["last"]
         },
         "pieType": "donut",
@@ -332,7 +332,7 @@
       },
       "options": {
         "reduceOptions": {
-          "values": true,
+          "values": false,
           "calcs": ["last"]
         },
         "orientation": "horizontal",
