@@ -18,6 +18,7 @@ services:
       REDIS_ADDR: "redis-cart:6379"
       ENABLE_TRACING: "1"
       COLLECTOR_SERVICE_ADDR: "jaeger.observability.svc:4317"
+      OTEL_SERVICE_NAME: "cartservice"
 
   checkoutservice:
     enabled: true
@@ -32,6 +33,7 @@ services:
       RECOMMENDATION_SERVICE_ADDR: "recommendationservice:8080"
       ENABLE_TRACING: "1"
       COLLECTOR_SERVICE_ADDR: "jaeger.observability.svc:4317"
+      OTEL_SERVICE_NAME: "checkoutservice"
 
   currencyservice:
     enabled: true
@@ -41,6 +43,7 @@ services:
       DISABLE_PROFILER: "1"
       ENABLE_TRACING: "1"
       COLLECTOR_SERVICE_ADDR: "jaeger.observability.svc:4317"
+      OTEL_SERVICE_NAME: "currencyservice"
 
   emailservice:
     enabled: true
@@ -68,6 +71,7 @@ services:
       ENABLE_PROFILER: "0"
       ENABLE_TRACING: "1"
       COLLECTOR_SERVICE_ADDR: "jaeger.observability.svc:4317"
+      OTEL_SERVICE_NAME: "frontend"
 
   loadgenerator:
     enabled: true
@@ -85,6 +89,7 @@ services:
       DISABLE_PROFILER: "1"
       ENABLE_TRACING: "1"
       COLLECTOR_SERVICE_ADDR: "jaeger.observability.svc:4317"
+      OTEL_SERVICE_NAME: "paymentservice"
 
   productcatalogservice:
     enabled: true
@@ -92,12 +97,16 @@ services:
     env:
       ENABLE_TRACING: "1"
       COLLECTOR_SERVICE_ADDR: "jaeger.observability.svc:4317"
+      OTEL_SERVICE_NAME: "productcatalogservice"
 
   recommendationservice:
     enabled: true
     port: 8080
     env:
       PRODUCT_CATALOG_SERVICE_ADDR: "productcatalogservice:3550"
+      ENABLE_TRACING: "1"
+      COLLECTOR_SERVICE_ADDR: "jaeger.observability.svc:4317"
+      OTEL_SERVICE_NAME: "recommendationservice"
 
   redis-cart:
     enabled: true
@@ -112,3 +121,4 @@ services:
     env:
       ENABLE_TRACING: "1"
       COLLECTOR_SERVICE_ADDR: "jaeger.observability.svc:4317"
+      OTEL_SERVICE_NAME: "shippingservice"
