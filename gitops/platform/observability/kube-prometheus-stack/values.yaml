@@ -1,9 +1,10 @@
-grafana:
-  sidecar:
-    dashboards:
-      searchNamespace: ALL
-  grafana.ini:
-    auth.anonymous:
-      enabled: true
-      org_name: "Main Org."
-      org_role: "Admin"
+kube-prometheus-stack:
+  grafana:
+    sidecar:
+      dashboards:
+        searchNamespace: ALL
+    grafana.ini:
+      auth.anonymous:
+        enabled: true
+        org_name: "Main Org."
+        org_role: "Admin"
