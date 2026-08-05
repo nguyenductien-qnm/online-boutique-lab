@@ -8,3 +8,9 @@ kube-prometheus-stack:
         enabled: true
         org_name: "Main Org."
         org_role: "Admin"
+    additionalDataSources:
+      - name: Jaeger
+        type: jaeger
+        uid: jaeger
+        url: http://jaeger.observability:16686
+        access: proxy

@@ -1,7 +1,7 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: kube-prometheus-stack
+  name: observability
   namespace: argocd
 spec:
   project: default
@@ -9,7 +9,7 @@ spec:
   source:
     repoURL: https://github.com/nguyenductien-qnm/online-boutique-lab.git
     targetRevision: main
-    path: gitops/platform/observability/kube-prometheus-stack
+    path: gitops/platform/observability
     helm:
       valueFiles:
         - values.yaml

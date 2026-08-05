@@ -3,4 +3,4 @@ kind: Kustomization
 
 resources:
   - online-boutique.yaml
-  - kube-prometheus-stack.yaml
+  - observability.yaml

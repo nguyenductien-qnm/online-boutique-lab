@@ -16,6 +16,8 @@ services:
     port: 7070
     env:
       REDIS_ADDR: "redis-cart:6379"
+      ENABLE_TRACING: "1"
+      COLLECTOR_SERVICE_ADDR: "jaeger.observability.svc:4317"
 
   checkoutservice:
     enabled: true
@@ -28,6 +30,8 @@ services:
       CURRENCY_SERVICE_ADDR: "currencyservice:7000"
       CART_SERVICE_ADDR: "cartservice:7070"
       RECOMMENDATION_SERVICE_ADDR: "recommendationservice:8080"
+      ENABLE_TRACING: "1"
+      COLLECTOR_SERVICE_ADDR: "jaeger.observability.svc:4317"
 
   currencyservice:
     enabled: true
@@ -35,6 +39,8 @@ services:
     env:
       PORT: "7000"
       DISABLE_PROFILER: "1"
+      ENABLE_TRACING: "1"
+      COLLECTOR_SERVICE_ADDR: "jaeger.observability.svc:4317"
 
   emailservice:
     enabled: true
@@ -60,6 +66,8 @@ services:
       AD_SERVICE_ADDR: "adservice:9555"
       SHOPPING_ASSISTANT_SERVICE_ADDR: "shoppingassistantservice:80"
       ENABLE_PROFILER: "0"
+      ENABLE_TRACING: "1"
+      COLLECTOR_SERVICE_ADDR: "jaeger.observability.svc:4317"
 
   loadgenerator:
     enabled: true
@@ -75,10 +83,15 @@ services:
     env:
       PORT: "50051"
       DISABLE_PROFILER: "1"
+      ENABLE_TRACING: "1"
+      COLLECTOR_SERVICE_ADDR: "jaeger.observability.svc:4317"
 
   productcatalogservice:
     enabled: true
     port: 3550
+    env:
+      ENABLE_TRACING: "1"
+      COLLECTOR_SERVICE_ADDR: "jaeger.observability.svc:4317"
 
   recommendationservice:
     enabled: true
@@ -96,3 +109,6 @@ services:
   shippingservice:
     enabled: true
     port: 50051
+    env:
+      ENABLE_TRACING: "1"
+      COLLECTOR_SERVICE_ADDR: "jaeger.observability.svc:4317"
